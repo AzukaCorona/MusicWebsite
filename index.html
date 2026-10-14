@@ -1,770 +1,456 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MaestroSight - Piano Sight Reading & Metronome Trainer</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Inter Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- VexFlow (Sheet Music Rendering) -->
+    <title>Piano Sight Reading Generator</title>
+    <!-- VexFlow for Sheet Music Rendering -->
     <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
-    <!-- Tone.js (Audio Synthesis) -->
+    <!-- Tone.js for Audio Playback & Metronome -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --border: #334155;
+            --success: #22c55e;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-color); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { width: 100%; max-width: 1000px; display: flex; flex-direction: column; gap: 20px; }
+        header { text-align: center; margin-bottom: 10px; }
+        header h1 { font-size: 2.2rem; color: var(--accent); margin-bottom: 5px; }
+        header p { color: var(--text-muted); font-size: 1rem; }
         
-        /* Piano key styles */
-        .piano-key {
-            user-select: none;
-            transition: background-color 0.1s ease, transform 0.05s ease;
-        }
-        .white-key {
-            background-color: #ffffff;
-            border: 1px solid #cbd5e1;
-        }
-        .white-key:hover {
-            background-color: #f1f5f9;
-        }
-        .white-key:active, .white-key.active {
-            background-color: #e2e8f0;
-            transform: translateY(2px);
-        }
-        .black-key {
-            background-color: #0f172a;
-            color: #ffffff;
-            z-index: 10;
-        }
-        .black-key:hover {
-            background-color: #1e293b;
-        }
-        .black-key:active, .black-key.active {
-            background-color: #334155;
-            transform: translateY(2px);
-        }
+        .panel { background-color: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         
-        /* Playback cursor */
-        #playbackCursor {
-            transition: left 0.05s linear;
-        }
+        .controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; align-items: end; }
+        .control-group { display: flex; flex-direction: column; gap: 6px; }
+        .control-group label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+        .control-group select, .control-group input { background: var(--bg-color); border: 1px solid var(--border); color: var(--text-color); padding: 10px; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; }
+        .control-group select:focus, .control-group input:focus { border-color: var(--accent); }
+        
+        .checkbox-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem; font-weight: 500; height: 42px; }
+        .checkbox-label input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+
+        .btn { background-color: var(--accent); color: #0f172a; border: none; padding: 11px 20px; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: background 0.2s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn:hover { background-color: var(--accent-hover); }
+        .btn:active { transform: scale(0.98); }
+        .btn-secondary { background-color: #334155; color: var(--text-color); }
+        .btn-secondary:hover { background-color: #475569; }
+        
+        .action-bar { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 5px; }
+
+        .sheet-container { background: #ffffff; border-radius: 12px; padding: 20px; min-height: 250px; display: flex; justify-content: center; align-items: center; overflow-x: auto; position: relative; }
+        #output { width: 100%; display: flex; justify-content: center; }
+
+        .piano-container { display: flex; justify-content: center; position: relative; background: #000; padding: 10px; border-radius: 8px; user-select: none; margin-top: 10px; overflow-x: auto; }
+        .piano { display: flex; position: relative; height: 120px; }
+        .key { position: relative; cursor: pointer; border-radius: 0 0 4px 4px; transition: background 0.1s; }
+        .key.white { width: 36px; height: 120px; background: #fff; border: 1px solid #ccc; z-index: 1; }
+        .key.white:hover, .key.white.active { background: #cbd5e1; }
+        .key.black { width: 24px; height: 75px; background: #1e293b; position: absolute; z-index: 2; margin-left: -12px; border-radius: 0 0 3px 3px; border: 1px solid #000; }
+        .key.black:hover, .key.black.active { background: #475569; }
+
+        .status-msg { text-align: center; color: var(--text-muted); font-size: 0.9rem; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 h-full flex flex-col justify-between overflow-x-hidden">
+<body>
+    <div class="container">
+        <header>
+            <h1>Piano Sight Reader</h1>
+            <p>Dynamic, musically-coherent practice sheets generated on the fly.</p>
+        </header>
 
-    <!-- Top Navigation Header -->
-    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0 shadow-sm">
-        <div class="flex items-center space-x-3">
-            <div class="bg-indigo-600 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
-                <i class="fa-solid fa-music text-xl"></i>
-            </div>
-            <div>
-                <h1 class="text-xl font-bold tracking-tight text-slate-900">MaestroSight</h1>
-                <p class="text-xs text-slate-500 font-medium">Interactive Piano Sight-Reading & Metronome Trainer</p>
-            </div>
-        </div>
-        <div class="flex items-center space-x-3">
-            <button id="toggleSettingsBtn" class="flex items-center space-x-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-semibold rounded-xl transition shadow-sm">
-                <i class="fa-solid fa-sliders"></i>
-                <span>Settings</span>
-            </button>
-            <button id="deployGuideBtn" class="flex items-center space-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition shadow-sm" title="GitHub Pages Guide">
-                <i class="fa-brands fa-github text-base"></i>
-                <span class="hidden sm:inline">GitHub Guide</span>
-            </button>
-        </div>
-    </header>
-
-    <!-- Main Workspace -->
-    <main class="flex-1 flex flex-col lg:flex-row p-4 lg:p-6 gap-6 max-w-[1600px] w-full mx-auto overflow-hidden">
-        
-        <!-- Left / Main Panel: Sheet Music & Player -->
-        <section class="flex-1 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative">
-            
-            <!-- Toolbar above sheet music -->
-            <div class="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4 bg-slate-50/50">
-                <div class="flex items-center space-x-2 flex-wrap gap-y-2">
-                    <span id="currentModeBadge" class="px-3 py-1 bg-indigo-100 text-indigo-800 text-xs font-bold rounded-full uppercase tracking-wider">Level 1: Beginner</span>
-                    <span id="currentKeyBadge" class="px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-full">Key: C Major</span>
-                    <span id="currentTimeBadge" class="px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-full">4/4</span>
-                </div>
-                <div class="flex items-center space-x-3 flex-wrap gap-y-2">
-                    <!-- Tempo & Metronome Controls -->
-                    <div class="flex items-center space-x-2 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs">
-                        <i class="fa-solid fa-gauge text-slate-400 text-xs"></i>
-                        <span class="text-xs font-semibold text-slate-600">BPM:</span>
-                        <input type="number" id="tempoInput" min="40" max="200" value="90" class="w-12 text-xs font-bold text-indigo-600 bg-transparent focus:outline-none">
-                        <label class="text-xs font-medium text-slate-600 flex items-center space-x-1 cursor-pointer border-l border-slate-200 pl-2">
-                            <input type="checkbox" id="metronomeToggle" class="rounded text-indigo-600 focus:ring-indigo-500">
-                            <span class="text-xs">Click</span>
-                        </label>
-                    </div>
-
-                    <button id="playBtn" class="flex items-center space-x-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition shadow-sm disabled:opacity-50">
-                        <i class="fa-solid fa-play"></i>
-                        <span>Listen</span>
-                    </button>
-                    <button id="stopBtn" class="hidden flex items-center space-x-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded-xl transition shadow-sm">
-                        <i class="fa-solid fa-stop"></i>
-                        <span>Stop</span>
-                    </button>
-                    <button id="generateNewBtn" class="flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition shadow-sm">
-                        <i class="fa-solid fa-rotate"></i>
-                        <span>New Piece</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Sheet Music Score Display Area -->
-            <div id="scoreContainer" class="flex-1 overflow-x-auto overflow-y-auto p-6 flex items-center justify-center bg-white min-h-[380px] relative">
-                <!-- Visual Playback Cursor -->
-                <div id="playbackCursor" class="absolute top-6 bottom-6 w-0.5 bg-rose-500 shadow-md z-20 pointer-events-none hidden"></div>
-                
-                <!-- VexFlow canvas / svg renders here -->
-                <div id="output" class="w-full flex justify-center relative"></div>
-                
-                <!-- Loading / Initial state -->
-                <div id="loadingOverlay" class="absolute inset-0 bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center space-y-2 transition-opacity duration-200 hidden">
-                    <i class="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-600"></i>
-                    <p class="text-sm font-medium text-slate-600">Generating musical piece...</p>
-                </div>
-            </div>
-
-            <!-- Interactive Piano Keyboard Footer inside Main Panel -->
-            <div class="border-t border-slate-100 bg-slate-50 p-4 flex flex-col items-center">
-                <div class="w-full flex items-center justify-between mb-2 px-2">
-                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Practice Keyboard (Click keys to test audio)</span>
-                    <div class="flex items-center space-x-2">
-                        <label class="text-xs font-medium text-slate-600 flex items-center space-x-1 cursor-pointer">
-                            <input type="checkbox" id="soundToggle" checked class="rounded text-indigo-600 focus:ring-indigo-500">
-                            <span>Audio On Keypress</span>
-                        </label>
-                    </div>
-                </div>
-                <!-- Piano Container -->
-                <div id="virtualPiano" class="relative flex bg-slate-800 p-2 rounded-xl shadow-inner overflow-x-auto max-w-full">
-                    <!-- Dynamically generated keys -->
-                </div>
-            </div>
-        </section>
-
-        <!-- Right / Settings Panel -->
-        <aside id="settingsPanel" class="w-full lg:w-80 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden shrink-0 transition-all duration-300">
-            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <h2 class="font-bold text-slate-900 flex items-center space-x-2">
-                    <i class="fa-solid fa-sliders text-indigo-600"></i>
-                    <span>Generation Settings</span>
-                </h2>
-                <button id="closeSettingsBtn" class="lg:hidden text-slate-400 hover:text-slate-600">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </div>
-
-            <div class="p-6 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
-                
-                <!-- Difficulty Level -->
-                <div class="space-y-2">
-                    <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Difficulty Level (1-4)</label>
-                    <div class="grid grid-cols-4 gap-2">
-                        <button data-level="1" class="diff-btn py-2 text-xs font-bold rounded-xl border border-indigo-600 bg-indigo-600 text-white shadow-xs transition">1</button>
-                        <button data-level="2" class="diff-btn py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition">2</button>
-                        <button data-level="3" class="diff-btn py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition">3</button>
-                        <button data-level="4" class="diff-btn py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition">4</button>
-                    </div>
-                    <p id="diffDescription" class="text-xs text-slate-500 mt-1">Level 1: Quarter and half notes, single hand, step-wise motion in C Major.</p>
-                </div>
-
-                <!-- Key Signature -->
-                <div class="space-y-2">
-                    <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Key Signature</label>
-                    <select id="keySelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="C">C Major (0 sharps/flats)</option>
-                        <option value="G">G Major (1 sharp)</option>
-                        <option value="D">D Major (2 sharps)</option>
-                        <option value="F">F Major (1 flat)</option>
-                        <option value="Bb">B♭ Major (2 flats)</option>
-                        <option value="Am">A Minor (Natural)</option>
+        <!-- Configuration Panel -->
+        <div class="panel">
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label for="difficulty">Difficulty (1-4)</label>
+                    <select id="difficulty">
+                        <option value="1">Level 1: Quarters/Halves, 1 Hand</option>
+                        <option value="2">Level 2: Adds Eighths & Rests</option>
+                        <option value="3" selected>Level 3: Both Hands & Complex Rhythms</option>
+                        <option value="4">Level 4: Full Range, Chords & Syncopation</option>
                     </select>
                 </div>
 
-                <!-- Clef Selection -->
-                <div class="space-y-2">
-                    <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Clef / Staff</label>
-                    <div class="grid grid-cols-3 gap-2">
-                        <button data-clef="treble" class="clef-btn py-2 text-xs font-semibold rounded-xl border border-indigo-600 bg-indigo-50 text-indigo-700 transition">Treble</button>
-                        <button data-clef="bass" class="clef-btn py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition">Bass</button>
-                        <button data-clef="grand" class="clef-btn py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition">Grand</button>
-                    </div>
+                <div class="control-group">
+                    <label for="clef">Clef Layout</label>
+                    <select id="clef">
+                        <option value="treble">Treble Clef Only</option>
+                        <option value="bass">Bass Clef Only</option>
+                        <option value="grand" selected>Grand Staff (Both)</option>
+                    </select>
                 </div>
 
-                <!-- Time Signature -->
-                <div class="space-y-2">
-                    <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Time Signature</label>
-                    <select id="timeSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="4/4">4/4 Common Time</option>
+                <div class="control-group">
+                    <label for="keySig">Key Signature</label>
+                    <select id="keySig">
+                        <option value="C" selected>C Major / A Minor</option>
+                        <option value="G">G Major / E Minor</option>
+                        <option value="F">F Major / D Minor</option>
+                        <option value="D">D Major / B Minor</option>
+                        <option value="Bb">Bb Major / G Minor</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="timeSig">Time Signature</label>
+                    <select id="timeSig">
+                        <option value="4/4" selected>4/4 Common Time</option>
                         <option value="3/4">3/4 Waltz Time</option>
                         <option value="2/4">2/4 March Time</option>
-                        <option value="6/8">6/8 Compound Time</option>
                     </select>
                 </div>
 
-                <!-- Chords Toggle -->
-                <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
-                    <div>
-                        <span class="text-xs font-bold text-slate-700 block uppercase tracking-wider">Chord Accompaniment</span>
-                        <span class="text-xs text-slate-500">Add harmonic background chords</span>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="chordsToggle" class="sr-only peer">
-                        <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                    </label>
+                <div class="control-group">
+                    <label for="tempo">Tempo (BPM)</label>
+                    <input type="number" id="tempo" value="80" min="40" max="180">
                 </div>
 
-                <!-- Apply Button -->
-                <button id="applySettingsBtn" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-md transition text-sm flex items-center justify-center space-x-2">
-                    <i class="fa-solid fa-check"></i>
-                    <span>Generate New Piece</span>
-                </button>
+                <div class="control-group">
+                    <label>Chords</label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="includeChords"> Include Harmonic Chords
+                    </label>
+                </div>
             </div>
-        </aside>
-    </main>
 
-    <!-- GitHub Pages Modal Guide -->
-    <div id="deployModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 class="font-bold text-lg text-slate-900 flex items-center space-x-2">
-                    <i class="fa-brands fa-github text-indigo-600 text-xl"></i>
-                    <span>Hosting on GitHub Pages</span>
-                </h3>
-                <button id="closeModalBtn" class="text-slate-400 hover:text-slate-600">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
+            <div class="action-bar" style="margin-top: 20px;">
+                <button class="btn" id="generateBtn">🔄 Generate New Piece</button>
+                <button class="btn btn-secondary" id="playBtn">▶ Listen / Playback</button>
+                <button class="btn btn-secondary" id="stopBtn" disabled>⏹ Stop</button>
             </div>
-            <div class="space-y-3 text-sm text-slate-600 leading-relaxed">
-                <p>Because this app is contained in a single standalone <code class="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-600 font-mono text-xs">index.html</code> file, publishing it for free on GitHub Pages takes under 2 minutes:</p>
-                <ol class="list-decimal pl-5 space-y-2">
-                    <li>Create a new public repository on GitHub (e.g. <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">piano-sight-reading</code>).</li>
-                    <li>Save this code into a file named <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">index.html</code> and push it to your repository's <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">main</code> branch.</li>
-                    <li>Go to your repository on GitHub &rarr; <strong>Settings</strong> &rarr; <strong>Pages</strong>.</li>
-                    <li>Under <strong>Build and deployment</strong>, select branch <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">main</code> (root <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">/ (root)</code>), then click <strong>Save</strong>.</li>
-                    <li>Your website will be live in 60 seconds at <code class="text-indigo-600 font-medium">https://&lt;your-username&gt;.github.io/&lt;repo-name&gt;/</code>!</li>
-                </ol>
+        </div>
+
+        <!-- Sheet Music Display Panel -->
+        <div class="panel">
+            <div class="sheet-container">
+                <div id="output"></div>
             </div>
-            <div class="pt-2 flex justify-end">
-                <button id="closeModalBtnFooter" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-xl text-sm hover:bg-indigo-700 transition">Got it!</button>
+            <div class="status-msg" id="statusMsg" style="margin-top: 10px;">Click "Generate New Piece" to start practicing!</div>
+        </div>
+
+        <!-- Virtual Piano Keyboard Reference -->
+        <div class="panel">
+            <div class="piano-container">
+                <div class="piano" id="virtualPiano"></div>
             </div>
         </div>
     </div>
 
-    <!-- JavaScript Application Logic -->
     <script>
-        // --- Musical Scale & Theory Definitions ---
-        const SCALES = {
-            'C': ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'],
-            'G': ['G3', 'A3', 'B3', 'C4', 'D4', 'E4', 'F#4', 'G4'],
-            'D': ['D4', 'E4', 'F#4', 'G4', 'A4', 'B4', 'C#5', 'D5'],
-            'F': ['F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'E4', 'F4'],
-            'Bb': ['Bb3', 'C4', 'D4', 'Eb4', 'F4', 'G4', 'A4', 'Bb4'],
-            'Am': ['A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G#4', 'A4']
-        };
-
-        const KEY_SIGS = {
-            'C': 'C', 'G': 'G', 'D': 'D', 'F': 'F', 'Bb': 'Bb', 'Am': 'Am'
-        };
-
-        // Difficulty rules
-        const DIFFICULTY_CONFIG = {
-            1: {
-                desc: "Level 1: Quarter & half notes, single hand, step-wise motion in C Major.",
-                noteTypes: ['q', 'h'],
-                maxSkip: 1, // Mostly steps (0 or 1 scale degree)
-                restProb: 0.05,
-                hands: ['treble'],
-                allowChords: false
-            },
-            2: {
-                desc: "Level 2: Adds eighth notes, whole notes, and mild skips (thirds).",
-                noteTypes: ['q', 'h', 'w', '8'],
-                maxSkip: 2,
-                restProb: 0.1,
-                hands: ['treble', 'bass'],
-                allowChords: false
-            },
-            3: {
-                desc: "Level 3: Introduces dotted rhythms, wider intervals, and optional chords.",
-                noteTypes: ['q', 'h', 'w', '8', '16'],
-                maxSkip: 3,
-                restProb: 0.15,
-                hands: ['treble', 'bass', 'grand'],
-                allowChords: true
-            },
-            4: {
-                desc: "Level 4: Full complexity with syncopation, rests, both hands, and full chords.",
-                noteTypes: ['q', 'h', 'w', '8', '16'],
-                maxSkip: 4,
-                restProb: 0.2,
-                hands: ['grand'],
-                allowChords: true
-            }
-        };
-
-        // --- App State ---
-        let appState = {
-            difficulty: 1,
-            key: 'C',
-            clef: 'treble',
-            timeSig: '4/4',
-            chordsEnabled: false,
-            tempo: 90,
-            metronomeOn: false,
-            soundOn: true,
-            measures: []
-        };
-
+        // Global State & Data structures
+        let currentPiece = null;
         let synth = null;
         let isPlaying = false;
-        let playbackTimeouts = [];
 
-        // --- Initialize Audio (Tone.js) ---
+        // Initialize Audio Synth
         function initAudio() {
             if (!synth) {
                 synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'triangle8' },
-                    envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 0.8 }
+                    oscillator: { type: "triangle" },
+                    envelope: { attack: 0.05, decay: 0.1, sustain: 0.3, release: 1 }
                 }).toDestination();
             }
         }
 
-        // --- Virtual Piano Initialization ---
-        function buildVirtualPiano() {
-            const pianoEl = document.getElementById('virtualPiano');
-            pianoEl.innerHTML = '';
-            
-            // Standard piano octave C4 to C5
-            const keys = [
-                { note: 'C4', type: 'white' },
-                { note: 'C#4', type: 'black', left: 24 },
-                { note: 'D4', type: 'white' },
-                { note: 'D#4', type: 'black', left: 60 },
-                { note: 'E4', type: 'white' },
-                { note: 'F4', type: 'white' },
-                { note: 'F#4', type: 'black', left: 132 },
-                { note: 'G4', type: 'white' },
-                { note: 'G#4', type: 'black', left: 168 },
-                { note: 'A4', type: 'white' },
-                { note: 'A#4', type: 'black', left: 204 },
-                { note: 'B4', type: 'white' },
-                { note: 'C5', type: 'white' }
+        // Setup Virtual Piano Keys
+        function setupPiano() {
+            const piano = document.getElementById('virtualPiano');
+            const notes = [
+                {note: 'C', type: 'white', octave: 3}, {note: 'C#', type: 'black', octave: 3, offset: 24},
+                {note: 'D', type: 'white', octave: 3}, {note: 'D#', type: 'black', octave: 3, offset: 60},
+                {note: 'E', type: 'white', octave: 3},
+                {note: 'F', type: 'white', octave: 3}, {note: 'F#', type: 'black', octave: 3, offset: 132},
+                {note: 'G', type: 'white', octave: 3}, {note: 'G#', type: 'black', octave: 3, offset: 168},
+                {note: 'A', type: 'white', octave: 3}, {note: 'A#', type: 'black', octave: 3, offset: 204},
+                {note: 'B', type: 'white', octave: 3},
+                {note: 'C', type: 'white', octave: 4}, {note: 'C#', type: 'black', octave: 4, offset: 276},
+                {note: 'D', type: 'white', octave: 4}, {note: 'D#', type: 'black', octave: 4, offset: 312},
+                {note: 'E', type: 'white', octave: 4},
+                {note: 'F', type: 'white', octave: 4}, {note: 'F#', type: 'black', octave: 4, offset: 384},
+                {note: 'G', type: 'white', octave: 4}, {note: 'G#', type: 'black', octave: 4, offset: 420},
+                {note: 'A', type: 'white', octave: 4}, {note: 'A#', type: 'black', octave: 4, offset: 456},
+                {note: 'B', type: 'white', octave: 4},
+                {note: 'C', type: 'white', octave: 5}
             ];
 
-            keys.forEach(k => {
-                const keyDiv = document.createElement('div');
-                keyDiv.className = `piano-key ${k.type === 'white' ? 'white-key w-10 h-32 rounded-b-lg flex items-end justify-center pb-2 text-[10px] font-bold text-slate-400' : 'black-key absolute w-7 h-20 rounded-b-md flex items-end justify-center pb-1 text-[8px] font-bold text-slate-300'}`;
-                if (k.type === 'black') {
-                    keyDiv.style.left = `${k.left}px`;
+            piano.innerHTML = '';
+            let whiteCount = 0;
+            notes.forEach(k => {
+                const keyEl = document.createElement('div');
+                keyEl.className = `key ${k.type}`;
+                if (k.type === 'white') {
+                    keyEl.style.left = `${whiteCount * 36}px`;
+                    whiteCount++;
+                } else {
+                    keyEl.style.left = `${k.offset}px`;
                 }
-                keyDiv.innerText = k.note.replace('4', '').replace('5', '5');
-                
-                keyDiv.addEventListener('mousedown', () => {
-                    playPianoNote(k.note);
-                    keyDiv.classList.add('active');
-                });
-                keyDiv.addEventListener('mouseup', () => keyDiv.classList.remove('active'));
-                keyDiv.addEventListener('mouseleave', () => keyDiv.classList.remove('active'));
 
-                pianoEl.appendChild(keyDiv);
+                const fullNote = `${k.note}${k.octave}`;
+                keyEl.addEventListener('mousedown', () => {
+                    initAudio();
+                    synth.triggerAttackRelease(fullNote, '4n');
+                    keyEl.classList.add('active');
+                    setTimeout(() => keyEl.classList.remove('active'), 200);
+                });
+                piano.appendChild(keyEl);
             });
+            piano.style.width = `${whiteCount * 36}px`;
         }
 
-        function playPianoNote(note) {
-            if (!document.getElementById('soundToggle').checked) return;
-            initAudio();
-            synth.triggerAttackRelease(note, '8n');
-        }
+        // Music Generation Algorithm
+        function generateMusic() {
+            const difficulty = parseInt(document.getElementById('difficulty').value);
+            const clefMode = document.getElementById('clef').value;
+            const keySig = document.getElementById('keySig').value;
+            const timeSig = document.getElementById('timeSig').value;
+            const includeChords = document.getElementById('includeChords').checked;
 
-        // --- Algorithmic Generator (Musically Coherent Melodies) ---
-        function generatePiece() {
-            const config = DIFFICULTY_CONFIG[appState.difficulty];
-            const scale = SCALES[appState.key] || SCALES['C'];
-            const [beatsPerBar, beatUnit] = appState.timeSig.split('/').map(Number);
-            const numMeasures = 8;
-            
-            let measures = [];
-            let lastNoteIdx = Math.floor(scale.length / 2);
+            const [beatsPerBar, beatUnit] = timeSig.split('/').map(Number);
+            const numBars = 6; // 6 measures for a nice length
 
-            for (let m = 0; m < numMeasures; m++) {
-                let currentMeasureBeats = 0;
-                let barNotes = [];
-                let barBassNotes = [];
+            // Scale notes lookup
+            const scales = {
+                'C': ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
+                'G': ['C', 'D', 'E', 'F#', 'G', 'A', 'B'],
+                'F': ['C', 'D', 'E', 'F', 'G', 'A', 'Bb'],
+                'D': ['C#', 'D', 'E', 'F#', 'G', 'A', 'B'],
+                'Bb': ['C', 'D', 'Eb', 'F', 'G', 'A', 'Bb']
+            };
+            const scaleNotes = scales[keySig] || scales['C'];
 
-                // Generate Treble / Main Hand
-                while (currentMeasureBeats < beatsPerBar) {
-                    let remaining = beatsPerBar - currentMeasureBeats;
-                    // Filter note types that fit into remaining beats
-                    let validTypes = config.noteTypes.filter(t => getDurationBeats(t, beatUnit) <= remaining);
-                    if (validTypes.length === 0) break;
+            // Duration pools based on difficulty
+            let allowedDurations = ['q', 'h'];
+            if (difficulty >= 2) allowedDurations.push('8');
+            if (difficulty >= 3 && beatsPerBar >= 3) allowedDurations.push('hd');
 
-                    // Probability of rest
-                    let isRest = Math.random() < config.restProb && currentMeasureBeats > 0 && remaining >= 1;
+            function createVoice(isBass) {
+                let measures = [];
+                let lastScaleIdx = 3; // Middle of scale
 
-                    let type = validTypes[Math.floor(Math.random() * validTypes.length)];
-                    let durationBeats = getDurationBeats(type, beatUnit);
+                for (let b = 0; b < numBars; b++) {
+                    let barNotes = [];
+                    let currentBarBeats = 0;
 
-                    if (isRest) {
-                        barNotes.push({ type: 'rest', duration: type, beats: durationBeats });
-                    } else {
-                        // Step-wise motion or small skip
-                        let skip = Math.floor(Math.random() * (config.maxSkip * 2 + 1)) - config.maxSkip;
-                        lastNoteIdx = Math.max(0, Math.min(scale.length - 1, lastNoteIdx + skip));
-                        let noteName = scale[lastNoteIdx];
+                    while (currentBarBeats < beatsPerBar) {
+                        let remainingBeats = beatsPerBar - currentBarBeats;
+                        // Pick duration fitting remaining beats
+                        let validDurs = allowedDurations.filter(d => {
+                            let durBeats = d === 'q' ? 1 : d === 'h' ? 2 : d === 'hd' ? 3 : d === '8' ? 0.5 : 1;
+                            return durBeats <= remainingBeats;
+                        });
+                        if (validDurs.length === 0) validDurs = ['q'];
+                        let dur = validDurs[Math.floor(Math.random() * validDurs.length)];
+                        let durBeats = dur === 'q' ? 1 : dur === 'h' ? 2 : dur === 'hd' ? 3 : dur === '8' ? 0.5 : 1;
 
-                        barNotes.push({ type: 'note', keys: [noteName], duration: type, beats: durationBeats });
-                    }
-                    currentMeasureBeats += durationBeats;
-                }
+                        // Stepwise melodic motion
+                        let step = Math.floor(Math.random() * 3) - 1; // -1, 0, +1
+                        lastScaleIdx = Math.max(0, Math.min(scaleNotes.length - 1, lastScaleIdx + step));
+                        let noteName = scaleNotes[lastScaleIdx];
 
-                // Generate Bass / Left Hand (if Grand staff or bass clef)
-                if (appState.clef === 'grand' || appState.clef === 'bass' || (appState.clef === 'treble' && config.hands.includes('bass') && m % 2 === 1)) {
-                    let bassCurrentBeats = 0;
-                    while (bassCurrentBeats < beatsPerBar) {
-                        let remaining = beatsPerBar - bassCurrentBeats;
-                        let type = remaining >= 2 ? 'h' : 'q';
-                        let durationBeats = getDurationBeats(type, beatUnit);
+                        // Assign octave based on clef / hand
+                        let octave = isBass ? (difficulty > 2 && Math.random() > 0.5 ? 3 : 2) : (difficulty > 3 && Math.random() > 0.6 ? 5 : 4);
+                        if (clefMode === 'treble') octave = 4;
+                        if (clefMode === 'bass') octave = 3;
+
+                        let noteString = `${noteName.toLowerCase()}${octave}/${dur}`;
                         
-                        // Root or fifth of scale
-                        let bassNote = scale[0].replace('4', '3');
-                        barBassNotes.push({ type: 'note', keys: [bassNote], duration: type, beats: durationBeats });
-                        bassCurrentBeats += durationBeats;
+                        // Handle chords if enabled
+                        if (includeChords && difficulty >= 3 && Math.random() < 0.25 && dur !== '8') {
+                            let thirdIdx = (lastScaleIdx + 2) % scaleNotes.length;
+                            let chordNote = `${scaleNotes[thirdIdx].toLowerCase()}${octave}`;
+                            noteString = `${noteName.toLowerCase()}${octave}+${chordNote}/${dur}`;
+                        }
+
+                        barNotes.push({ note: noteString, duration: dur, beats: durBeats });
+                        currentBarBeats += durBeats;
                     }
+                    measures.push(barNotes);
                 }
-
-                // Optional Chords
-                let chord = null;
-                if (appState.chordsEnabled && (m % 2 === 0)) {
-                    chord = [scale[0], scale[2], scale[4]]; // Triad
-                }
-
-                measures.push({
-                    treble: barNotes,
-                    bass: barBassNotes.length > 0 ? barBassNotes : null,
-                    chord: chord
-                });
+                return measures;
             }
 
-            appState.measures = measures;
+            let trebleMeasures = (clefMode === 'treble' || clefMode === 'grand') ? createVoice(false) : null;
+            let bassMeasures = (clefMode === 'bass' || clefMode === 'grand') ? createVoice(true) : null;
+
+            currentPiece = { timeSig, keySig, clefMode, trebleMeasures, bassMeasures, numBars };
             renderSheetMusic();
+            document.getElementById('statusMsg').textContent = "Piece generated successfully! Ready to play or practice.";
         }
 
-        function getDurationBeats(type, beatUnit) {
-            switch(type) {
-                case 'w': return 4;
-                case 'h': return 2;
-                case 'q': return 1;
-                case '8': return 0.5;
-                case '16': return 0.25;
-                default: return 1;
-            }
-        }
-
-        // --- Render Sheet Music using VexFlow ---
+        // Render Sheet Music using VexFlow
         function renderSheetMusic() {
-            const outputEl = document.getElementById('output');
-            outputEl.innerHTML = '';
+            const output = document.getElementById('output');
+            output.innerHTML = '';
 
-            const VF = Vex.Flow;
-            const width = Math.max(outputEl.clientWidth || 800, 800);
-            const height = appState.clef === 'grand' ? 320 : 220;
+            if (!currentPiece) return;
 
-            const div = document.createElement('div');
-            outputEl.appendChild(div);
+            const { Renderer, Factory, EasyScore, Stave } = VexFlow;
+            
+            // Calculate width based on measures
+            const width = Math.max(750, currentPiece.numBars * 130 + 100);
+            const height = currentPiece.clefMode === 'grand' ? 260 : 180;
 
-            const renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
+            const renderer = new Renderer(output, Renderer.Backends.SVG);
             renderer.resize(width, height);
             const context = renderer.getContext();
 
-            const [beatsPerBar, beatUnit] = appState.timeSig.split('/').map(Number);
-            const keySig = KEY_SIGS[appState.key] || 'C';
+            const factory = new Factory({ renderer: { elementId: 'output', width, height } });
+            const score = factory.EasyScore();
 
-            // Layout measures in rows of 4
-            const measuresPerRow = 4;
-            const rowWidth = (width - 40) / Math.min(measuresPerRow, appState.measures.length);
+            let xPos = 10;
+            let staveWidth = 130;
 
-            let startX = 20;
-            let startY = 30;
+            for (let i = 0; i < currentPiece.numBars; i++) {
+                if (currentPiece.clefMode === 'grand') {
+                    // Grand Staff layout
+                    const trebleStave = new Stave(xPos, 20, staveWidth);
+                    const bassStave = new Stave(xPos, 120, staveWidth);
 
-            appState.measures.forEach((barData, idx) => {
-                if (idx > 0 && idx % measuresPerRow === 0) {
-                    startX = 20;
-                    startY += appState.clef === 'grand' ? 140 : 100;
-                }
-
-                if (appState.clef === 'grand') {
-                    // Grand Staff (Treble + Bass)
-                    const staveTreble = new VF.Stave(startX, startY, rowWidth);
-                    const staveBass = new VF.Stave(startX, startY + 80, rowWidth);
-
-                    if (idx % measuresPerRow === 0) {
-                        staveTreble.addClef('treble').addKeySignature(keySig).addTimeSignature(appState.timeSig);
-                        staveBass.addClef('bass').addKeySignature(keySig).addTimeSignature(appState.timeSig);
+                    if (i === 0) {
+                        trebleStave.addClef('treble').addKeySignature(currentPiece.keySig).addTimeSignature(currentPiece.timeSig);
+                        bassStave.addClef('bass').addKeySignature(currentPiece.keySig).addTimeSignature(currentPiece.timeSig);
+                        trebleStave.setBegBarType(VexFlow.BarLine.type.REPEAT_BEGIN);
+                        bassStave.setBegBarType(VexFlow.BarLine.type.REPEAT_BEGIN);
                     }
-                    staveTreble.setContext(context).draw();
-                    staveBass.setContext(context).draw();
-
-                    // Connector brace
-                    if (idx % measuresPerRow === 0) {
-                        new VF.StaveConnector(staveTreble, staveBass).setType(VF.StaveConnector.type.BRACE).setContext(context).draw();
-                        new VF.StaveConnector(staveTreble, staveBass).setType(VF.StaveConnector.type.SINGLE_LEFT).setContext(context).draw();
-                    }
-                    new VF.StaveConnector(staveTreble, staveBass).setType(VF.StaveConnector.type.SINGLE_RIGHT).setContext(context).draw();
-
-                    // Treble Voice Notes
-                    const trebleNotes = barData.treble.map(n => {
-                        if (n.type === 'rest') {
-                            return new VF.StaveNote({ clef: 'treble', keys: ['b/4'], duration: n.duration + 'r' });
-                        }
-                        return new VF.StaveNote({ clef: 'treble', keys: n.keys.map(formatVexNote), duration: n.duration });
-                    });
-
-                    // Bass Voice Notes
-                    let bassNotes = [];
-                    if (barData.bass) {
-                        bassNotes = barData.bass.map(n => {
-                            if (n.type === 'rest') {
-                                return new VF.StaveNote({ clef: 'bass', keys: ['d/3'], duration: n.duration + 'r' });
-                            }
-                            return new VF.StaveNote({ clef: 'bass', keys: n.keys.map(formatVexNote), duration: n.duration });
-                        });
-                    } else {
-                        bassNotes = [new VF.StaveNote({ clef: 'bass', keys: ['d/3'], duration: 'wr' }]);
+                    if (i === currentPiece.numBars - 1) {
+                        trebleStave.setEndBarType(VexFlow.BarLine.type.END);
+                        bassStave.setEndBarType(VexFlow.BarLine.type.END);
                     }
 
-                    try {
-                        const voiceTreble = new VF.Voice({ num_beats: beatsPerBar, beat_value: beatUnit }).addTickables(trebleNotes);
-                        const voiceBass = new VF.Voice({ num_beats: beatsPerBar, beat_value: beatUnit }).addTickables(bassNotes);
-                        
-                        const formatter = new VF.Formatter().joinVoices([voiceTreble]).joinVoices([voiceBass]);
-                        formatter.format([voiceTreble, voiceBass], rowWidth - 70);
+                    trebleStave.setContext(context).draw();
+                    bassStave.setContext(context).draw();
 
-                        voiceTreble.draw(context, staveTreble);
-                        voiceBass.draw(context, staveBass);
-                    } catch (e) {
-                        console.error("VexFlow rendering error:", e);
+                    // Draw notes if available
+                    if (currentPiece.trebleMeasures && currentPiece.trebleMeasures[i]) {
+                        let noteStrs = currentPiece.trebleMeasures[i].map(n => n.note).join(', ');
+                        let voice = score.voice(score.notes(noteStrs, { stem: 'up' }));
+                        let formatter = new VexFlow.Formatter().joinVoices([voice]);
+                        formatter.format([voice], staveWidth - 40);
+                        voice.draw(context, trebleStave);
+                    }
+
+                    if (currentPiece.bassMeasures && currentPiece.bassMeasures[i]) {
+                        let noteStrs = currentPiece.bassMeasures[i].map(n => n.note).join(', ');
+                        let voice = score.voice(score.notes(noteStrs, { stem: 'down' }));
+                        let formatter = new VexFlow.Formatter().joinVoices([voice]);
+                        formatter.format([voice], staveWidth - 40);
+                        voice.draw(context, bassStave);
+                    }
+
+                    // Brace connecting grand staff
+                    if (i === 0) {
+                        const connector = new VexFlow.StaveConnector(trebleStave, bassStave);
+                        connector.setAtr('type', 'brace');
+                        connector.setContext(context).draw();
+                        const lineConnector = new VexFlow.StaveConnector(trebleStave, bassStave);
+                        lineConnector.setAtr('type', 'single');
+                        lineConnector.setContext(context).draw();
                     }
 
                 } else {
-                    // Single Clef (Treble or Bass)
-                    const stave = new VF.Stave(startX, startY, rowWidth);
-                    if (idx % measuresPerRow === 0) {
-                        stave.addClef(appState.clef).addKeySignature(keySig).addTimeSignature(appState.timeSig);
+                    // Single Clef layout
+                    const clefType = currentPiece.clefMode;
+                    const stave = new Stave(xPos, 40, staveWidth);
+
+                    if (i === 0) {
+                        stave.addClef(clefType).addKeySignature(currentPiece.keySig).addTimeSignature(currentPiece.timeSig);
+                        stave.setBegBarType(VexFlow.BarLine.type.REPEAT_BEGIN);
+                    }
+                    if (i === currentPiece.numBars - 1) {
+                        stave.setEndBarType(VexFlow.BarLine.type.END);
                     }
                     stave.setContext(context).draw();
 
-                    const notes = barData.treble.map(n => {
-                        if (n.type === 'rest') {
-                            return new VF.StaveNote({ clef: appState.clef, keys: [appState.clef === 'bass' ? 'd/3' : 'b/4'], duration: n.duration + 'r' });
-                        }
-                        return new VF.StaveNote({ clef: appState.clef, keys: n.keys.map(formatVexNote), duration: n.duration });
-                    });
-
-                    try {
-                        const voice = new VF.Voice({ num_beats: beatsPerBar, beat_value: beatUnit }).addTickables(notes);
-                        new VF.Formatter().joinVoices([voice]).format([voice], rowWidth - 60);
+                    let measuresData = clefType === 'treble' ? currentPiece.trebleMeasures : currentPiece.bassMeasures;
+                    if (measuresData && measuresData[i]) {
+                        let noteStrs = measuresData[i].map(n => n.note).join(', ');
+                        let voice = score.voice(score.notes(noteStrs));
+                        let formatter = new VexFlow.Formatter().joinVoices([voice]);
+                        formatter.format([voice], staveWidth - 40);
                         voice.draw(context, stave);
-                    } catch (e) {
-                        console.error("VexFlow rendering error:", e);
                     }
                 }
 
-                startX += rowWidth;
-            });
+                xPos += staveWidth;
+            }
         }
 
-        function formatVexNote(noteStr) {
-            // Converts 'C4' -> 'c/4', 'F#4' -> 'f#/4'
-            let note = noteStr.toLowerCase();
-            return note.slice(0, -1) + '/' + note.slice(-1);
-        }
-
-        // --- Playback & Visual Cursor ---
+        // Playback Functionality using Tone.js Transport
         async function startPlayback() {
-            if (isPlaying) return;
-            await Tone.start();
+            if (!currentPiece) return;
             initAudio();
+            await Tone.start();
+
+            if (isPlaying) stopPlayback();
+
+            const bpm = parseInt(document.getElementById('tempo').value) || 80;
+            Tone.Transport.bpm.value = bpm;
+
+            // Gather all scheduled events
+            let measures = currentPiece.trebleMeasures || currentPiece.bassMeasures;
+            if (!measures) return;
 
             isPlaying = true;
-            document.getElementById('playBtn').classList.add('hidden');
-            document.getElementById('stopBtn').classList.remove('hidden');
+            document.getElementById('playBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            document.getElementById('statusMsg').textContent = "Playing preview...";
 
-            const cursor = document.getElementById('playbackCursor');
-            cursor.classList.remove('hidden');
+            let timeOffset = 0;
+            const beatDuration = 60 / bpm;
 
-            const bpm = appState.tempo;
-            const beatDurationMs = (60 / bpm) * 1000;
-            const [beatsPerBar] = appState.timeSig.split('/').map(Number);
-            const totalBeats = appState.measures.length * beatsPerBar;
-            const totalDurationMs = totalBeats * beatDurationMs;
+            measures.forEach((bar, barIdx) => {
+                bar.forEach(item => {
+                    let durationSec = item.beats * beatDuration;
+                    let notesToPlay = item.note.split('/')[0].replace(/([a-g])/g, '$1').toUpperCase();
+                    // Clean up VexFlow note format for Tone.js (e.g. c4+e4 -> [C4, E4])
+                    let toneNotes = item.note.split('/')[0].split('+').map(n => {
+                        let clean = n.trim();
+                        // Format letter + accidental + octave correctly for Tone.js
+                        return clean.slice(0, -1).toUpperCase() + clean.slice(-1);
+                    });
 
-            // Schedule audio notes
-            let currentAudioTime = Tone.now();
-            const timePerBeat = 60 / bpm;
+                    Tone.Transport.schedule((time) => {
+                        synth.triggerAttackRelease(toneNotes, durationSec * 0.9, time);
+                    }, timeOffset);
 
-            appState.measures.forEach((bar, mIdx) => {
-                let barTimeOffset = 0;
-                bar.treble.forEach(note => {
-                    let noteDurationSec = note.beats * timePerBeat;
-                    if (note.type === 'note') {
-                        synth.triggerAttackRelease(note.keys, noteDurationSec, currentAudioTime + barTimeOffset);
-                    }
-                    barTimeOffset += noteDurationSec;
+                    timeOffset += durationSec;
                 });
-
-                // Metronome click track if enabled
-                if (appState.metronomeOn) {
-                    for (let b = 0; b < beatsPerBar; b++) {
-                        let clickTime = currentAudioTime + (b * timePerBeat);
-                        let clickSynth = new Tone.Synth({ oscillator: { type: 'sine' } }).toDestination();
-                        clickSynth.triggerAttackRelease(b === 0 ? 'C5' : 'G4', '32n', clickTime, 0.3);
-                    }
-                }
             });
 
-            // Animate visual cursor smoothly across score container
-            const scoreContainer = document.getElementById('scoreContainer');
-            const maxScrollWidth = scoreContainer.scrollWidth - scoreContainer.clientWidth;
-            let startTime = performance.now();
+            // Schedule stop at end
+            Tone.Transport.schedule((time) => {
+                stopPlayback();
+            }, timeOffset);
 
-            function animateCursor(timestamp) {
-                if (!isPlaying) return;
-                let elapsed = timestamp - startTime;
-                let progress = Math.min(1, elapsed / totalDurationMs);
-
-                let cursorLeft = progress * (scoreContainer.scrollWidth - 40);
-                cursor.style.left = `${cursorLeft}px`;
-
-                if (cursorLeft > scoreContainer.clientWidth + scoreContainer.scrollLeft - 100) {
-                    scoreContainer.scrollLeft = cursorLeft - 200;
-                }
-
-                if (progress < 1) {
-                    requestAnimationFrame(animateCursor);
-                } else {
-                    stopPlayback();
-                }
-            }
-
-            requestAnimationFrame(animateCursor);
+            Tone.Transport.start();
         }
 
         function stopPlayback() {
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
             isPlaying = false;
-            if (synth) synth.releaseAll();
-            document.getElementById('playBtn').classList.remove('hidden');
-            document.getElementById('stopBtn').classList.add('hidden');
-            document.getElementById('playbackCursor').classList.add('hidden');
+            document.getElementById('playBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('statusMsg').textContent = "Playback finished.";
         }
 
-        // --- UI Event Listeners ---
-        document.addEventListener('DOMContentLoaded', () => {
-            buildVirtualPiano();
-            generatePiece();
+        // Wire up Event Listeners
+        document.getElementById('generateBtn').addEventListener('click', generateMusic);
+        document.getElementById('playBtn').addEventListener('click', startPlayback);
+        document.getElementById('stopBtn').addEventListener('click', stopPlayback);
 
-            // Difficulty buttons
-            document.querySelectorAll('.diff-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    document.querySelectorAll('.diff-btn').forEach(b => {
-                        b.className = "diff-btn py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition";
-                    });
-                    e.target.className = "diff-btn py-2 text-xs font-bold rounded-xl border border-indigo-600 bg-indigo-600 text-white shadow-xs transition";
-                    
-                    appState.difficulty = parseInt(e.target.getAttribute('data-level'));
-                    document.getElementById('currentModeBadge.innerText').innerText = `Level ${appState.difficulty}: ${['Beginner', 'Elementary', 'Intermediate', 'Advanced'][appState.difficulty - 1]}`;
-                    document.getElementById('diffDescription').innerText = DIFFICULTY_CONFIG[appState.difficulty].desc;
-                });
-            });
-
-            // Clef buttons
-            document.querySelectorAll('.clef-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    document.querySelectorAll('.clef-btn').forEach(b => {
-                        b.className = "clef-btn py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition";
-                    });
-                    e.target.className = "clef-btn py-2 text-xs font-semibold rounded-xl border border-indigo-600 bg-indigo-50 text-indigo-700 transition";
-                    appState.clef = e.target.getAttribute('data-clef');
-                });
-            });
-
-            // Select dropdowns
-            document.getElementById('keySelect').addEventListener('change', (e) => {
-                appState.key = e.target.value;
-                document.getElementById('currentKeyBadge').innerText = `Key: ${e.target.value} Major`;
-            });
-
-            document.getElementById('timeSelect').addEventListener('change', (e) => {
-                appState.timeSig = e.target.value;
-                document.getElementById('currentTimeBadge').innerText = e.target.value;
-            });
-
-            document.getElementById('chordsToggle').addEventListener('change', (e) => {
-                appState.chordsEnabled = e.target.checked;
-            });
-
-            document.getElementById('tempoInput').addEventListener('change', (e) => {
-                appState.tempo = Math.max(40, Math.min(200, parseInt(e.target.value) || 90));
-            });
-
-            document.getElementById('metronomeToggle').addEventListener('change', (e) => {
-                appState.metronomeOn = e.target.checked;
-            });
-
-            // Action Buttons
-            document.getElementById('generateNewBtn').addEventListener('click', () => {
-                stopPlayback();
-                const overlay = document.getElementById('loadingOverlay');
-                overlay.classList.remove('hidden');
-                setTimeout(() => {
-                    generatePiece();
-                    overlay.classList.add('hidden');
-                }, 150);
-            });
-
-            document.getElementById('applySettingsBtn').addEventListener('click', () => {
-                stopPlayback();
-                generatePiece();
-                // Close settings on mobile
-                if (window.innerWidth < 1024) {
-                    document.getElementById('settingsPanel').classList.add('hidden');
-                }
-            });
-
-            document.getElementById('playBtn').addEventListener('click', startPlayback);
-            document.getElementById('stopBtn').addEventListener('click', stopPlayback);
-
-            // Settings toggle for mobile
-            const settingsPanel = document.getElementById('settingsPanel');
-            document.getElementById('toggleSettingsBtn').addEventListener('click', () => {
-                settingsPanel.classList.toggle('hidden');
-            });
-            document.getElementById('closeSettingsBtn').addEventListener('click', () => {
-                settingsPanel.classList.add('hidden');
-            });
-
-            // GitHub Deploy Guide Modal
-            const deployModal = document.getElementById('deployModal');
-            document.getElementById('deployGuideBtn').addEventListener('click', () => deployModal.classList.remove('hidden'));
-            document.getElementById('closeModalBtn').addEventListener('click', () => deployModal.classList.add('hidden'));
-            document.getElementById('closeModalBtnFooter').addEventListener('click', () => deployModal.classList.add('hidden'));
-
-            // Handle Window Resize
-            window.addEventListener('resize', () => {
-                renderSheetMusic();
-            });
+        // Initial setup on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            setupPiano();
+            generateMusic();
         });
     </script>
 </body>
