@@ -151,7 +151,6 @@
         let synth = null;
         let isPlaying = false;
 
-        // Initialize Audio Synthesizer safely on interaction
         function initAudio() {
             if (!synth) {
                 synth = new Tone.PolySynth(Tone.Synth, {
@@ -161,7 +160,6 @@
             }
         }
 
-        // Setup Virtual Piano Keys
         function setupPiano() {
             const piano = document.getElementById('virtualPiano');
             const notes = [
@@ -207,7 +205,6 @@
             piano.style.width = `${whiteCount * 36}px`;
         }
 
-        // Music Generation Algorithm
         function generateMusic() {
             const difficulty = parseInt(document.getElementById('difficulty').value);
             const clefMode = document.getElementById('clef').value;
@@ -219,11 +216,11 @@
             const numBars = 6;
 
             const scales = {
-                'C': ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
-                'G': ['C', 'D', 'E', 'F#', 'G', 'A', 'B'],
-                'F': ['C', 'D', 'E', 'F', 'G', 'A', 'Bb'],
-                'D': ['C#', 'D', 'E', 'F#', 'G', 'A', 'B'],
-                'Bb': ['C', 'D', 'Eb', 'F', 'G', 'A', 'Bb']
+                'C': ['c', 'd', 'e', 'f', 'g', 'a', 'b'],
+                'G': ['c', 'd', 'e', 'f#', 'g', 'a', 'b'],
+                'F': ['c', 'd', 'e', 'f', 'g', 'a', 'bb'],
+                'D': ['c#', 'd', 'e', 'f#', 'g', 'a', 'b'],
+                'Bb': ['c', 'd', 'eb', 'f', 'g', 'a', 'bb']
             };
             const scaleNotes = scales[keySig] || scales['C'];
 
@@ -257,12 +254,13 @@
                         if (clefMode === 'treble') octave = 4;
                         if (clefMode === 'bass') octave = 3;
 
-                        let noteString = `${noteName.toLowerCase()}${octave}/${dur}`;
+                        // Correct VexFlow key formatting (e.g. c/4, f#/4)
+                        let noteString = `${noteName}/${octave}/${dur}`;
                         
                         if (includeChords && difficulty >= 3 && Math.random() < 0.25 && dur !== '8') {
                             let thirdIdx = (lastScaleIdx + 2) % scaleNotes.length;
-                            let chordNote = `${scaleNotes[thirdIdx].toLowerCase()}${octave}`;
-                            noteString = `${noteName.toLowerCase()}${octave}+${chordNote}/${dur}`;
+                            let chordNote = `${scaleNotes[thirdIdx]}/${octave}`;
+                            noteString = `${noteName}/${octave}+${chordNote}/${dur}`;
                         }
 
                         barNotes.push({ note: noteString, duration: dur, beats: durBeats });
@@ -281,7 +279,6 @@
             document.getElementById('statusMsg').textContent = "Piece generated successfully! Click Play to listen.";
         }
 
-        // Render Sheet Music using VexFlow
         function renderSheetMusic() {
             const output = document.getElementById('output');
             output.innerHTML = '';
@@ -289,7 +286,7 @@
             if (!currentPiece) return;
 
             try {
-                const { Renderer, Stave, StaveConnector, BarLine, Voice, Formatter } = VexFlow;
+                const { Renderer, Stave, StaveConnector, BarLine, Voice, Formatter, StaveNote } = VexFlow;
                 
                 const width = Math.max(750, currentPiece.numBars * 130 + 100);
                 const height = currentPiece.clefMode === 'grand' ? 260 : 180;
@@ -321,24 +318,38 @@
                         bassStave.setContext(context).draw();
 
                         if (currentPiece.trebleMeasures && currentPiece.trebleMeasures[i]) {
-                            let notes = currentPiece.trebleMeasures[i].map(n => new VexFlow.StaveNote({
-                                keys: n.note.split('/')[0].split('+').map(k => k.slice(0,-1) + '/' + k.slice(-1)),
-                                duration: n.note.split('/')[1] || 'q',
-                                clef: 'treble',
-                                stem: 'up'
-                            }));
+                            let notes = currentPiece.trebleMeasures[i].map(n => {
+                                let parts = n.note.split('/');
+                                let rawKeys = parts[0] + '/' + parts[1];
+                                let duration = parts[2] || 'q';
+                                if (parts.length > 3) rawKeys = [parts[0] + '/' + parts[1], parts[2] + '/' + parts[3]];
+                                
+                                return new StaveNote({
+                                    keys: Array.isArray(rawKeys) ? rawKeys : [rawKeys],
+                                    duration: duration,
+                                    clef: 'treble',
+                                    stem: 'up'
+                                });
+                            });
                             let voice = new Voice({ num_beats: parseInt(currentPiece.timeSig.split('/')[0]) }).addTickables(notes);
                             new Formatter().joinVoices([voice]).format([voice], staveWidth - 40);
                             voice.draw(context, trebleStave);
                         }
 
                         if (currentPiece.bassMeasures && currentPiece.bassMeasures[i]) {
-                            let notes = currentPiece.bassMeasures[i].map(n => new VexFlow.StaveNote({
-                                keys: n.note.split('/')[0].split('+').map(k => k.slice(0,-1) + '/' + k.slice(-1)),
-                                duration: n.note.split('/')[1] || 'q',
-                                clef: 'bass',
-                                stem: 'down'
-                            }));
+                            let notes = currentPiece.bassMeasures[i].map(n => {
+                                let parts = n.note.split('/');
+                                let rawKeys = parts[0] + '/' + parts[1];
+                                let duration = parts[2] || 'q';
+                                if (parts.length > 3) rawKeys = [parts[0] + '/' + parts[1], parts[2] + '/' + parts[3]];
+
+                                return new StaveNote({
+                                    keys: Array.isArray(rawKeys) ? rawKeys : [rawKeys],
+                                    duration: duration,
+                                    clef: 'bass',
+                                    stem: 'down'
+                                });
+                            });
                             let voice = new Voice({ num_beats: parseInt(currentPiece.timeSig.split('/')[0]) }).addTickables(notes);
                             new Formatter().joinVoices([voice]).format([voice], staveWidth - 40);
                             voice.draw(context, bassStave);
@@ -368,11 +379,18 @@
 
                         let measuresData = clefType === 'treble' ? currentPiece.trebleMeasures : currentPiece.bassMeasures;
                         if (measuresData && measuresData[i]) {
-                            let notes = measuresData[i].map(n => new VexFlow.StaveNote({
-                                keys: n.note.split('/')[0].split('+').map(k => k.slice(0,-1) + '/' + k.slice(-1)),
-                                duration: n.note.split('/')[1] || 'q',
-                                clef: clefType
-                            }));
+                            let notes = measuresData[i].map(n => {
+                                let parts = n.note.split('/');
+                                let rawKeys = parts[0] + '/' + parts[1];
+                                let duration = parts[2] || 'q';
+                                if (parts.length > 3) rawKeys = [parts[0] + '/' + parts[1], parts[2] + '/' + parts[3]];
+
+                                return new StaveNote({
+                                    keys: Array.isArray(rawKeys) ? rawKeys : [rawKeys],
+                                    duration: duration,
+                                    clef: clefType
+                                });
+                            });
                             let voice = new Voice({ num_beats: parseInt(currentPiece.timeSig.split('/')[0]) }).addTickables(notes);
                             new Formatter().joinVoices([voice]).format([voice], staveWidth - 40);
                             voice.draw(context, stave);
@@ -387,7 +405,6 @@
             }
         }
 
-        // Playback Functionality
         async function startPlayback() {
             if (!currentPiece) return;
             await Tone.start();
@@ -418,10 +435,12 @@
                     let tCursor = 0;
                     barVoice.forEach(item => {
                         if (!barEvents[tCursor]) barEvents[tCursor] = [];
-                        let tones = item.note.split('/')[0].split('+').map(n => {
-                            let clean = n.trim();
-                            return clean.slice(0, -1).toUpperCase() + clean.slice(-1);
-                        });
+                        let rawNoteParts = item.note.split('/');
+                        let tones = [rawNoteParts[0].toUpperCase() + rawNoteParts[1]];
+                        if (rawNoteParts.length > 3) {
+                            // handles chords during audio playback mapping
+                            tones.push(rawNoteParts[2].toUpperCase() + rawNoteParts[3]);
+                        }
                         barEvents[tCursor].push({ notes: tones, duration: item.beats * beatDuration });
                         tCursor += item.beats;
                     });
@@ -458,12 +477,10 @@
             document.getElementById('statusMsg').textContent = "Playback finished.";
         }
 
-        // Wire up Event Listeners
         document.getElementById('generateBtn').addEventListener('click', generateMusic);
         document.getElementById('playBtn').addEventListener('click', startPlayback);
         document.getElementById('stopBtn').addEventListener('click', stopPlayback);
 
-        // Initial setup on page load
         window.addEventListener('DOMContentLoaded', () => {
             setupPiano();
             initAudio();
