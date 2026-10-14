@@ -135,7 +135,7 @@
             <div class="sheet-container">
                 <div id="output"></div>
             </div>
-            <div class="status-msg" id="statusMsg" style="margin-top: 10px;">Loading VexFlow music fonts...</div>
+            <div class="status-msg" id="statusMsg" style="margin-top: 10px;">Ready! Click "Generate New Piece" to begin.</div>
         </div>
 
         <!-- Virtual Piano Keyboard Reference -->
@@ -150,7 +150,6 @@
         let currentPiece = null;
         let synth = null;
         let isPlaying = false;
-        let fontsLoaded = false;
 
         function initAudio() {
             if (!synth) {
@@ -207,7 +206,6 @@
         }
 
         function generateMusic() {
-            if (!fontsLoaded) return;
             const difficulty = parseInt(document.getElementById('difficulty').value);
             const clefMode = document.getElementById('clef').value;
             const keySig = document.getElementById('keySig').value;
@@ -481,18 +479,11 @@
         document.getElementById('playBtn').addEventListener('click', startPlayback);
         document.getElementById('stopBtn').addEventListener('click', stopPlayback);
 
-        // Load VexFlow fonts asynchronously before initialization, then boot app
+        // Immediate application boot on page load
         window.addEventListener('DOMContentLoaded', () => {
             setupPiano();
             initAudio();
-            
-            VexFlow.loadFonts().then(() => {
-                fontsLoaded = true;
-                generateMusic();
-            }).catch(err => {
-                console.error("Failed to load VexFlow fonts:", err);
-                document.getElementById('statusMsg').textContent = "Error loading music notation fonts.";
-            });
+            generateMusic();
         });
     </script>
 </body>
