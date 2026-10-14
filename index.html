@@ -40,6 +40,7 @@
         .btn { background-color: var(--accent); color: #0f172a; border: none; padding: 11px 20px; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: background 0.2s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .btn:hover { background-color: var(--accent-hover); }
         .btn:active { transform: scale(0.98); }
+        .btn:disabled { background-color: var(--border); color: var(--text-muted); cursor: not-allowed; }
         .btn-secondary { background-color: #334155; color: var(--text-color); }
         .btn-secondary:hover { background-color: #475569; }
         
@@ -47,6 +48,7 @@
 
         .sheet-container { background: #ffffff; border-radius: 12px; padding: 20px; min-height: 250px; display: flex; justify-content: center; align-items: center; overflow-x: auto; position: relative; }
         #output { width: 100%; display: flex; justify-content: center; }
+        #output svg { max-width: 100%; height: auto; }
 
         .piano-container { display: flex; justify-content: center; position: relative; background: #000; padding: 10px; border-radius: 8px; user-select: none; margin-top: 10px; overflow-x: auto; }
         .piano { display: flex; position: relative; height: 120px; }
@@ -123,7 +125,7 @@
 
             <div class="action-bar" style="margin-top: 20px;">
                 <button class="btn" id="generateBtn">🔄 Generate New Piece</button>
-                <button class="btn btn-secondary" id="playBtn">▶ Listen / Playback</button>
+                <button class="btn btn-secondary" id="playBtn" disabled>▶ Listen / Playback</button>
                 <button class="btn btn-secondary" id="stopBtn" disabled>⏹ Stop</button>
             </div>
         </div>
@@ -133,7 +135,7 @@
             <div class="sheet-container">
                 <div id="output"></div>
             </div>
-            <div class="status-msg" id="statusMsg" style="margin-top: 10px;">Click "Generate New Piece" to start practicing!</div>
+            <div class="status-msg" id="statusMsg" style="margin-top: 10px;">Loading acoustic piano sound samples...</div>
         </div>
 
         <!-- Virtual Piano Keyboard Reference -->
@@ -145,17 +147,27 @@
     </div>
 
     <script>
-        // Global State & Data structures
         let currentPiece = null;
-        let synth = null;
+        let pianoSampler = null;
         let isPlaying = false;
+        let samplesLoaded = false;
 
-        // Initialize Audio Synth
+        // Initialize Real Acoustic Piano Sampler using Tone.js
         function initAudio() {
-            if (!synth) {
-                synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: "triangle" },
-                    envelope: { attack: 0.05, decay: 0.1, sustain: 0.3, release: 1 }
+            if (!pianoSampler) {
+                pianoSampler = new Tone.Sampler({
+                    urls: {
+                        "C4": "C4.mp3",
+                        "Dis4": "Ds4.mp3",
+                        "F#4": "Fs4.mp3",
+                        "A4": "A4.mp3"
+                    },
+                    baseUrl: "https://tonejs.github.io/audio/salamander/",
+                    onload: () => {
+                        samplesLoaded = true;
+                        document.getElementById('playBtn').disabled = false;
+                        document.getElementById('statusMsg').textContent = "Piano loaded! Click 'Generate New Piece' to practice.";
+                    }
                 }).toDestination();
             }
         }
@@ -193,10 +205,13 @@
                     keyEl.style.left = `${k.offset}px`;
                 }
 
-                const fullNote = `${k.note}${k.octave}`;
+                // Sharp format conversion for Tone.js sampler
+                const fullNote = `${k.note.replace('#', 's')}${k.octave}`;
                 keyEl.addEventListener('mousedown', () => {
                     initAudio();
-                    synth.triggerAttackRelease(fullNote, '4n');
+                    if (samplesLoaded) {
+                        pianoSampler.triggerAttackRelease(fullNote, '4n');
+                    }
                     keyEl.classList.add('active');
                     setTimeout(() => keyEl.classList.remove('active'), 200);
                 });
@@ -214,9 +229,8 @@
             const includeChords = document.getElementById('includeChords').checked;
 
             const [beatsPerBar, beatUnit] = timeSig.split('/').map(Number);
-            const numBars = 6; // 6 measures for a nice length
+            const numBars = 6;
 
-            // Scale notes lookup
             const scales = {
                 'C': ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
                 'G': ['C', 'D', 'E', 'F#', 'G', 'A', 'B'],
@@ -226,14 +240,13 @@
             };
             const scaleNotes = scales[keySig] || scales['C'];
 
-            // Duration pools based on difficulty
             let allowedDurations = ['q', 'h'];
             if (difficulty >= 2) allowedDurations.push('8');
             if (difficulty >= 3 && beatsPerBar >= 3) allowedDurations.push('hd');
 
             function createVoice(isBass) {
                 let measures = [];
-                let lastScaleIdx = 3; // Middle of scale
+                let lastScaleIdx = 3;
 
                 for (let b = 0; b < numBars; b++) {
                     let barNotes = [];
@@ -241,7 +254,6 @@
 
                     while (currentBarBeats < beatsPerBar) {
                         let remainingBeats = beatsPerBar - currentBarBeats;
-                        // Pick duration fitting remaining beats
                         let validDurs = allowedDurations.filter(d => {
                             let durBeats = d === 'q' ? 1 : d === 'h' ? 2 : d === 'hd' ? 3 : d === '8' ? 0.5 : 1;
                             return durBeats <= remainingBeats;
@@ -250,19 +262,16 @@
                         let dur = validDurs[Math.floor(Math.random() * validDurs.length)];
                         let durBeats = dur === 'q' ? 1 : dur === 'h' ? 2 : dur === 'hd' ? 3 : dur === '8' ? 0.5 : 1;
 
-                        // Stepwise melodic motion
-                        let step = Math.floor(Math.random() * 3) - 1; // -1, 0, +1
+                        let step = Math.floor(Math.random() * 3) - 1;
                         lastScaleIdx = Math.max(0, Math.min(scaleNotes.length - 1, lastScaleIdx + step));
                         let noteName = scaleNotes[lastScaleIdx];
 
-                        // Assign octave based on clef / hand
                         let octave = isBass ? (difficulty > 2 && Math.random() > 0.5 ? 3 : 2) : (difficulty > 3 && Math.random() > 0.6 ? 5 : 4);
                         if (clefMode === 'treble') octave = 4;
                         if (clefMode === 'bass') octave = 3;
 
                         let noteString = `${noteName.toLowerCase()}${octave}/${dur}`;
                         
-                        // Handle chords if enabled
                         if (includeChords && difficulty >= 3 && Math.random() < 0.25 && dur !== '8') {
                             let thirdIdx = (lastScaleIdx + 2) % scaleNotes.length;
                             let chordNote = `${scaleNotes[thirdIdx].toLowerCase()}${octave}`;
@@ -282,19 +291,18 @@
 
             currentPiece = { timeSig, keySig, clefMode, trebleMeasures, bassMeasures, numBars };
             renderSheetMusic();
-            document.getElementById('statusMsg').textContent = "Piece generated successfully! Ready to play or practice.";
+            document.getElementById('statusMsg').textContent = "Piece generated! Ready for playback.";
         }
 
-        // Render Sheet Music using VexFlow
+        // Render Sheet Music using VexFlow 4 Factory API
         function renderSheetMusic() {
             const output = document.getElementById('output');
             output.innerHTML = '';
 
             if (!currentPiece) return;
 
-            const { Renderer, Factory, EasyScore, Stave } = VexFlow;
+            const { Renderer, Factory, Stave, StaveConnector, BarLine } = VexFlow;
             
-            // Calculate width based on measures
             const width = Math.max(750, currentPiece.numBars * 130 + 100);
             const height = currentPiece.clefMode === 'grand' ? 260 : 180;
 
@@ -310,25 +318,23 @@
 
             for (let i = 0; i < currentPiece.numBars; i++) {
                 if (currentPiece.clefMode === 'grand') {
-                    // Grand Staff layout
                     const trebleStave = new Stave(xPos, 20, staveWidth);
                     const bassStave = new Stave(xPos, 120, staveWidth);
 
                     if (i === 0) {
                         trebleStave.addClef('treble').addKeySignature(currentPiece.keySig).addTimeSignature(currentPiece.timeSig);
                         bassStave.addClef('bass').addKeySignature(currentPiece.keySig).addTimeSignature(currentPiece.timeSig);
-                        trebleStave.setBegBarType(VexFlow.BarLine.type.REPEAT_BEGIN);
-                        bassStave.setBegBarType(VexFlow.BarLine.type.REPEAT_BEGIN);
+                        trebleStave.setBegBarType(BarLine.type.REPEAT_BEGIN);
+                        bassStave.setBegBarType(BarLine.type.REPEAT_BEGIN);
                     }
                     if (i === currentPiece.numBars - 1) {
-                        trebleStave.setEndBarType(VexFlow.BarLine.type.END);
-                        bassStave.setEndBarType(VexFlow.BarLine.type.END);
+                        trebleStave.setEndBarType(BarLine.type.END);
+                        bassStave.setEndBarType(BarLine.type.END);
                     }
 
                     trebleStave.setContext(context).draw();
                     bassStave.setContext(context).draw();
 
-                    // Draw notes if available
                     if (currentPiece.trebleMeasures && currentPiece.trebleMeasures[i]) {
                         let noteStrs = currentPiece.trebleMeasures[i].map(n => n.note).join(', ');
                         let voice = score.voice(score.notes(noteStrs, { stem: 'up' }));
@@ -345,27 +351,26 @@
                         voice.draw(context, bassStave);
                     }
 
-                    // Brace connecting grand staff
                     if (i === 0) {
-                        const connector = new VexFlow.StaveConnector(trebleStave, bassStave);
-                        connector.setAtr('type', 'brace');
+                        const connector = new StaveConnector(trebleStave, bassStave);
+                        connector.setX(trebleStave.getX());
+                        connector.setType('brace');
                         connector.setContext(context).draw();
-                        const lineConnector = new VexFlow.StaveConnector(trebleStave, bassStave);
-                        lineConnector.setAtr('type', 'single');
+                        const lineConnector = new StaveConnector(trebleStave, bassStave);
+                        lineConnector.setType('single');
                         lineConnector.setContext(context).draw();
                     }
 
                 } else {
-                    // Single Clef layout
                     const clefType = currentPiece.clefMode;
                     const stave = new Stave(xPos, 40, staveWidth);
 
                     if (i === 0) {
                         stave.addClef(clefType).addKeySignature(currentPiece.keySig).addTimeSignature(currentPiece.timeSig);
-                        stave.setBegBarType(VexFlow.BarLine.type.REPEAT_BEGIN);
+                        stave.setBegBarType(BarLine.type.REPEAT_BEGIN);
                     }
                     if (i === currentPiece.numBars - 1) {
-                        stave.setEndBarType(VexFlow.BarLine.type.END);
+                        stave.setEndBarType(BarLine.type.END);
                     }
                     stave.setContext(context).draw();
 
@@ -383,9 +388,9 @@
             }
         }
 
-        // Playback Functionality using Tone.js Transport
+        // Playback Functionality
         async function startPlayback() {
-            if (!currentPiece) return;
+            if (!currentPiece || !samplesLoaded) return;
             initAudio();
             await Tone.start();
 
@@ -394,38 +399,74 @@
             const bpm = parseInt(document.getElementById('tempo').value) || 80;
             Tone.Transport.bpm.value = bpm;
 
-            // Gather all scheduled events
-            let measures = currentPiece.trebleMeasures || currentPiece.bassMeasures;
-            if (!measures) return;
+            // Combine treble and bass notes for playback
+            let timeOffset = 0;
+            const beatDuration = 60 / bpm;
 
             isPlaying = true;
             document.getElementById('playBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
-            document.getElementById('statusMsg').textContent = "Playing preview...";
+            document.getElementById('statusMsg').textContent = "Playing preview with grand piano samples...";
 
-            let timeOffset = 0;
-            const beatDuration = 60 / bpm;
-
-            measures.forEach((bar, barIdx) => {
-                bar.forEach(item => {
-                    let durationSec = item.beats * beatDuration;
-                    let notesToPlay = item.note.split('/')[0].replace(/([a-g])/g, '$1').toUpperCase();
-                    // Clean up VexFlow note format for Tone.js (e.g. c4+e4 -> [C4, E4])
-                    let toneNotes = item.note.split('/')[0].split('+').map(n => {
-                        let clean = n.trim();
-                        // Format letter + accidental + octave correctly for Tone.js
-                        return clean.slice(0, -1).toUpperCase() + clean.slice(-1);
+            for (let i = 0; i < currentPiece.numBars; i++) {
+                let trebleBar = currentPiece.trebleMeasures ? currentPiece.trebleMeasures[i] : [];
+                let bassBar = currentPiece.bassMeasures ? currentPiece.bassMeasures[i] : [];
+                
+                // Assuming uniform bar lengths across voices, take treble or bass length
+                let maxSteps = Math.max(trebleBar.length, bassBar.length);
+                
+                // For simplicity in playback scheduling, step through notes or group by beat positions. 
+                // Let's build a timeline map per bar.
+                let barEvents = {};
+                
+                if (trebleBar) {
+                    let tCursor = 0;
+                    trebleBar.forEach(item => {
+                        if (!barEvents[tCursor]) barEvents[tCursor] = [];
+                        let notes = item.note.split('/')[0].split('+').map(n => {
+                            let clean = n.trim();
+                            let pitch = clean.slice(0, -1);
+                            let octave = clean.slice(-1);
+                            return pitch.replace('#', 's').toUpperCase() + octave;
+                        });
+                        barEvents[tCursor].push({ notes, duration: item.beats * beatDuration });
+                        tCursor += item.beats;
                     });
+                }
+
+                if (bassBar) {
+                    let tCursor = 0;
+                    bassBar.forEach(item => {
+                        if (!barEvents[tCursor]) barEvents[tCursor] = [];
+                        let notes = item.note.split('/')[0].split('+').map(n => {
+                            let clean = n.trim();
+                            let pitch = clean.slice(0, -1);
+                            let octave = clean.slice(-1);
+                            return pitch.replace('#', 's').toUpperCase() + octave;
+                        });
+                        barEvents[tCursor].push({ notes, duration: item.beats * beatDuration });
+                        tCursor += item.beats;
+                    });
+                }
+
+                let barStartOffset = timeOffset;
+                let beatsInBar = parseInt(currentPiece.timeSig.split('/')[0]);
+
+                // Schedule events in this bar
+                Object.keys(barEvents.length ? barEvents : {}).forEach(beatOffset => {
+                    let offsetVal = parseFloat(beatOffset);
+                    let eventsAtBeat = barEvents[beatOffset];
 
                     Tone.Transport.schedule((time) => {
-                        synth.triggerAttackRelease(toneNotes, durationSec * 0.9, time);
-                    }, timeOffset);
-
-                    timeOffset += durationSec;
+                        eventsAtBeat.forEach(ev => {
+                            pianoSampler.triggerAttackRelease(ev.notes, ev.duration * 0.9, time);
+                        });
+                    }, barStartOffset + (offsetVal * beatDuration));
                 });
-            });
 
-            // Schedule stop at end
+                timeOffset += beatsInBar * beatDuration;
+            }
+
             Tone.Transport.schedule((time) => {
                 stopPlayback();
             }, timeOffset);
@@ -437,19 +478,20 @@
             Tone.Transport.stop();
             Tone.Transport.cancel();
             isPlaying = false;
-            document.getElementById('playBtn').disabled = false;
+            if (samplesLoaded) document.getElementById('playBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
             document.getElementById('statusMsg').textContent = "Playback finished.";
         }
 
-        // Wire up Event Listeners
+        // Event listeners
         document.getElementById('generateBtn').addEventListener('click', generateMusic);
         document.getElementById('playBtn').addEventListener('click', startPlayback);
         document.getElementById('stopBtn').addEventListener('click', stopPlayback);
 
-        // Initial setup on page load
+        // Initial setup
         window.addEventListener('DOMContentLoaded', () => {
             setupPiano();
+            initAudio();
             generateMusic();
         });
     </script>
