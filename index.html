@@ -254,15 +254,14 @@
                         if (clefMode === 'treble') octave = 4;
                         if (clefMode === 'bass') octave = 3;
 
-                        let noteString = `${noteName}/${octave}/${dur}`;
+                        let keys = [`${noteName}/${octave}`];
                         
                         if (includeChords && difficulty >= 3 && Math.random() < 0.25 && dur !== '8') {
                             let thirdIdx = (lastScaleIdx + 2) % scaleNotes.length;
-                            let chordNote = `${scaleNotes[thirdIdx]}/${octave}`;
-                            noteString = `${noteName}/${octave}+${chordNote}/${dur}`;
+                            keys.push(`${scaleNotes[thirdIdx]}/${octave}`);
                         }
 
-                        barNotes.push({ note: noteString, duration: dur, beats: durBeats });
+                        barNotes.push({ keys: keys, duration: dur, beats: durBeats });
                         currentBarBeats += durBeats;
                     }
                     measures.push(barNotes);
@@ -317,38 +316,24 @@
                         bassStave.setContext(context).draw();
 
                         if (currentPiece.trebleMeasures && currentPiece.trebleMeasures[i]) {
-                            let notes = currentPiece.trebleMeasures[i].map(n => {
-                                let parts = n.note.split('/');
-                                let rawKeys = parts[0] + '/' + parts[1];
-                                let duration = parts[2] || 'q';
-                                if (parts.length > 3) rawKeys = [parts[0] + '/' + parts[1], parts[2] + '/' + parts[3]];
-                                
-                                return new StaveNote({
-                                    keys: Array.isArray(rawKeys) ? rawKeys : [rawKeys],
-                                    duration: duration,
-                                    clef: 'treble',
-                                    stem: 'up'
-                                });
-                            });
+                            let notes = currentPiece.trebleMeasures[i].map(n => new StaveNote({
+                                keys: n.keys,
+                                duration: n.duration,
+                                clef: 'treble',
+                                stem: 'up'
+                            }));
                             let voice = new Voice({ num_beats: parseInt(currentPiece.timeSig.split('/')[0]) }).addTickables(notes);
                             new Formatter().joinVoices([voice]).format([voice], staveWidth - 40);
                             voice.draw(context, trebleStave);
                         }
 
                         if (currentPiece.bassMeasures && currentPiece.bassMeasures[i]) {
-                            let notes = currentPiece.bassMeasures[i].map(n => {
-                                let parts = n.note.split('/');
-                                let rawKeys = parts[0] + '/' + parts[1];
-                                let duration = parts[2] || 'q';
-                                if (parts.length > 3) rawKeys = [parts[0] + '/' + parts[1], parts[2] + '/' + parts[3]];
-
-                                return new StaveNote({
-                                    keys: Array.isArray(rawKeys) ? rawKeys : [rawKeys],
-                                    duration: duration,
-                                    clef: 'bass',
-                                    stem: 'down'
-                                });
-                            });
+                            let notes = currentPiece.bassMeasures[i].map(n => new StaveNote({
+                                keys: n.keys,
+                                duration: n.duration,
+                                clef: 'bass',
+                                stem: 'down'
+                            }));
                             let voice = new Voice({ num_beats: parseInt(currentPiece.timeSig.split('/')[0]) }).addTickables(notes);
                             new Formatter().joinVoices([voice]).format([voice], staveWidth - 40);
                             voice.draw(context, bassStave);
@@ -378,18 +363,11 @@
 
                         let measuresData = clefType === 'treble' ? currentPiece.trebleMeasures : currentPiece.bassMeasures;
                         if (measuresData && measuresData[i]) {
-                            let notes = measuresData[i].map(n => {
-                                let parts = n.note.split('/');
-                                let rawKeys = parts[0] + '/' + parts[1];
-                                let duration = parts[2] || 'q';
-                                if (parts.length > 3) rawKeys = [parts[0] + '/' + parts[1], parts[2] + '/' + parts[3]];
-
-                                return new StaveNote({
-                                    keys: Array.isArray(rawKeys) ? rawKeys : [rawKeys],
-                                    duration: duration,
-                                    clef: clefType
-                                });
-                            });
+                            let notes = measuresData[i].map(n => new StaveNote({
+                                keys: n.keys,
+                                duration: n.duration,
+                                clef: clefType
+                            }));
                             let voice = new Voice({ num_beats: parseInt(currentPiece.timeSig.split('/')[0]) }).addTickables(notes);
                             new Formatter().joinVoices([voice]).format([voice], staveWidth - 40);
                             voice.draw(context, stave);
@@ -434,11 +412,10 @@
                     let tCursor = 0;
                     barVoice.forEach(item => {
                         if (!barEvents[tCursor]) barEvents[tCursor] = [];
-                        let rawNoteParts = item.note.split('/');
-                        let tones = [rawNoteParts[0].toUpperCase() + rawNoteParts[1]];
-                        if (rawNoteParts.length > 3) {
-                            tones.push(rawNoteParts[2].toUpperCase() + rawNoteParts[3]);
-                        }
+                        let tones = item.keys.map(k => {
+                            let parts = k.split('/');
+                            return parts[0].toUpperCase() + parts[1];
+                        });
                         barEvents[tCursor].push({ notes: tones, duration: item.beats * beatDuration });
                         tCursor += item.beats;
                     });
@@ -479,7 +456,6 @@
         document.getElementById('playBtn').addEventListener('click', startPlayback);
         document.getElementById('stopBtn').addEventListener('click', stopPlayback);
 
-        // Immediate application boot on page load
         window.addEventListener('DOMContentLoaded', () => {
             setupPiano();
             initAudio();
