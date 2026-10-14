@@ -135,7 +135,7 @@
             <div class="sheet-container">
                 <div id="output"></div>
             </div>
-            <div class="status-msg" id="statusMsg" style="margin-top: 10px;">Ready! Click "Generate New Piece" to begin.</div>
+            <div class="status-msg" id="statusMsg" style="margin-top: 10px;">Loading VexFlow music fonts...</div>
         </div>
 
         <!-- Virtual Piano Keyboard Reference -->
@@ -150,6 +150,7 @@
         let currentPiece = null;
         let synth = null;
         let isPlaying = false;
+        let fontsLoaded = false;
 
         function initAudio() {
             if (!synth) {
@@ -206,6 +207,7 @@
         }
 
         function generateMusic() {
+            if (!fontsLoaded) return;
             const difficulty = parseInt(document.getElementById('difficulty').value);
             const clefMode = document.getElementById('clef').value;
             const keySig = document.getElementById('keySig').value;
@@ -254,7 +256,6 @@
                         if (clefMode === 'treble') octave = 4;
                         if (clefMode === 'bass') octave = 3;
 
-                        // Correct VexFlow key formatting (e.g. c/4, f#/4)
                         let noteString = `${noteName}/${octave}/${dur}`;
                         
                         if (includeChords && difficulty >= 3 && Math.random() < 0.25 && dur !== '8') {
@@ -438,7 +439,6 @@
                         let rawNoteParts = item.note.split('/');
                         let tones = [rawNoteParts[0].toUpperCase() + rawNoteParts[1]];
                         if (rawNoteParts.length > 3) {
-                            // handles chords during audio playback mapping
                             tones.push(rawNoteParts[2].toUpperCase() + rawNoteParts[3]);
                         }
                         barEvents[tCursor].push({ notes: tones, duration: item.beats * beatDuration });
@@ -481,10 +481,18 @@
         document.getElementById('playBtn').addEventListener('click', startPlayback);
         document.getElementById('stopBtn').addEventListener('click', stopPlayback);
 
+        // Load VexFlow fonts asynchronously before initialization, then boot app
         window.addEventListener('DOMContentLoaded', () => {
             setupPiano();
             initAudio();
-            generateMusic();
+            
+            VexFlow.loadFonts().then(() => {
+                fontsLoaded = true;
+                generateMusic();
+            }).catch(err => {
+                console.error("Failed to load VexFlow fonts:", err);
+                document.getElementById('statusMsg').textContent = "Error loading music notation fonts.";
+            });
         });
     </script>
 </body>
